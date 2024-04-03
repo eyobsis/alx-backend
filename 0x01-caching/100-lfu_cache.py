@@ -1,128 +1,73 @@
 #!/usr/bin/env python3
-
+"""Task 5: Least Frequently Used caching module.
 """
-This Python module provides various caching implementations: FIFO,
-LIFO, LRU, MRU,
-and LFU. It leverages a base `BaseCaching` class (not shown here) 
-for potential
-shared functionality across different caching strategies.
-"""
-
 from collections import OrderedDict
 
+from base_caching import BaseCaching
 
-class BaseCaching:
+
+class LFUCache(BaseCaching):
+    """Represents a cache object implementing the Least Frequently Used (LFU)
+    replacement policy for efficient storage and retrieval of items.
     """
-    Base class for various caching implementations (not shown in detail).
-    Likely provides shared attributes or methods for caching functionality.
-    """
-
-    MAX_ITEMS = 100  # Example maximum number of items in the cache
-
-
-class FIFOCache(BaseCaching):
-    '''
-    `FIFOCache` class implements a caching system that evicts the 
-    least recently
-    inserted item when the cache reaches
-    its maximum capacity (First-In-First-Out).
-    '''
-
     def __init__(self):
-        '''
-        Initializer for the `FIFOCache` class.
-        - Calls the superclass (`BaseCaching`) initializer.
-        - Initializes an `OrderedDict` named `cache_data` to store
-        key-value pairs.
-          - `OrderedDict` helps maintain the insertion order
-          for FIFO eviction.
-        '''
+        """Initializes the LFU cache with an ordered dictionary to store
+        key-value pairs and a list to keep track of key frequencies.
+        """
         super().__init__()
         self.cache_data = OrderedDict()
+        self.keys_freq = []
+
+    def __reorder_items(self, mru_key):
+        """Reorders the items in the cache based on the most recently used
+        key (MRU) to maintain the LFU property.
+        """
+        max_positions = []
+        mru_freq = 0
+        mru_pos = 0
+        ins_pos = 0
+        for i, key_freq in enumerate(self.keys_freq):
+            if key_freq[0] == mru_key:
+                mru_freq = key_freq[1] + 1
+                mru_pos = i
+                break
+            elif len(max_positions) == 0:
+                max_positions.append(i)
+            elif key_freq[1] < self.keys_freq[max_positions[-1]][1]:
+                max_positions.append(i)
+        max_positions.reverse()
+        for pos in max_positions:
+            if self.keys_freq[pos][1] > mru_freq:
+                break
+            ins_pos = pos
+        self.keys_freq.pop(mru_pos)
+        self.keys_freq.insert(ins_pos, [mru_key, mru_freq])
 
     def put(self, key, item):
-        '''
-        This method adds a key-value pair to the cache.
-        - Checks for invalid input (key or item being None).
-        - Evicts the least recently used item if the cache is full:
-        - Removes the first inserted item (key) using `popitem(last=False)`.
-        - Prints a message indicating the discarded key using
-        f-string formatting.
-        - Adds the new key-value pair to the `cache_data` dictionary.
-        '''
-
+        """Adds an item with the specified key into the LFU cache.
+        """
         if key is None or item is None:
             return
-
-        if len(self.cache_data) > BaseCaching.MAX_ITEMS:
-            first_key, _ = self.cache_data.popitem(last=False)
-            print(f"DISCARD: {first_key}")
-
-        self.cache_data[key] = item
-
-    def get(self, key):
-        '''
-        Retrieves a value from the cache associated with the provided key.
-        - Uses the `get` method of `OrderedDict` to retrieve 
-        the value for the key.
-        - Returns `None` if the key is not found.
-        '''
-
-        return self.cache_data.get(key, None)
-
-
-class LIFOCache(BaseCaching):
-    '''
-    `LIFOCache` class implements a caching system that evicts
-    the most recently
-    inserted item when the cache reaches its maximum capacity (Last-In-First-Out,
-    also known as stack-based caching).
-    '''
-
-    def __init__(self):
-        '''
-        Initializer for the `LIFOCache` class.
-        - Calls the superclass (`BaseCaching`) initializer.
-        - Initializes an `OrderedDict` named `cache_data` 
-        to store key-value pairs.
-        - `OrderedDict` is used to facilitate 
-        LIFO eviction by tracking insertion order.
-        '''
-
-        super().__init__()
-        self.cache_data = OrderedDict()
-
-    def put(self, key, item):
-        '''
-        This method adds a key-value pair to the cache.
-        - Checks for invalid input (key or item being None).
-        - Discards the most recently used item if the cache is full:
-        - Removes the last inserted item (key) using `popitem(True)`.
-        - Prints a message indicating the discarded key.
-        - Adds the new key-value pair to the `cache_data` dictionary.
-        - Moves the new key to the end of the `OrderedDict` to maintain 
-        LIFO order.
-        '''
-
-        if key is None or item is None:
-            return
-
         if key not in self.cache_data:
             if len(self.cache_data) + 1 > BaseCaching.MAX_ITEMS:
-                last_key, _ = self.cache_data.popitem(True)
-                print("DISCARD:", last_key)
+                lfu_key, _ = self.keys_freq[-1]
+                self.cache_data.pop(lfu_key)
+                self.keys_freq.pop()
+                print("DISCARD:", lfu_key)
+            self.cache_data[key] = item
+            ins_index = len(self.keys_freq)
+            for i, key_freq in enumerate(self.keys_freq):
+                if key_freq[1] == 0:
+                    ins_index = i
+                    break
+            self.keys_freq.insert(ins_index, [key, 0])
+        else:
+            self.cache_data[key] = item
+            self.__reorder_items(key)
 
-        self.cache_data[key] = item
-        self.cache_data.move_to_end(key, last=True)  # Ensure LIFO order
-
-        def get(self, key):
-        """
-         Retrieves a value from the cache associated
-         with the provided key.
-        - Uses the `get` method of `OrderedDict` to retrieve the value
-        for the key.
-        - Returns `None` if the key is not found.
-        - Does not affect the ordering of items in the cache.
+    def get(self, key):
+        """Retrieves the value associated with the specified key from the
+        LFU cache.
         """
         if key is not None and key in self.cache_data:
             self.__reorder_items(key)
